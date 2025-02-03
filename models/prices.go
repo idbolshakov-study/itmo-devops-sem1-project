@@ -45,7 +45,7 @@ func StorePricesFromBody(body io.ReadCloser) (int, error) {
 
   var csvReader *csv.Reader = nil
   for _, file := range zipReader.File {
-    if file.Name != "data.csv" {
+    if file.Name != "test_data.csv" {
       log.Println("data.csv not found in zip archive", file.Name)
       return 0, fmt.Errorf("data.csv no found in zip archive")
     }
