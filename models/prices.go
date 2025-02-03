@@ -126,11 +126,10 @@ func StorePricesFromBody(body io.ReadCloser) (int, error) {
 
 func SelectPricesSummary(totalItems int) *PricesSummary {
   ps := PricesSummary{}
-
-  query := "SELECT COUNT(DISTINCT category) AS total_categories, SUM(price) AS total_price FROM prices"
-  row := PgxPool.QueryRow(context.Background(), query)
-  row.Scan(&ps.TotalCategories, &ps.TotalPrice)
   ps.TotalItems = totalItems
+
+  query := "SELECT COUNT(DISTINCT category) AS total_categories, SUM(price) AS total_price FROM prices;"
+  PgxPool.QueryRow(context.Background(), query).Scan(&ps.TotalCategories, &ps.TotalPrice)
 
   return &ps
 }
