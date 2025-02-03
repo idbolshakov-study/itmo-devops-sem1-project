@@ -133,3 +133,27 @@ func SelectPricesSummary(totalItems int) *PricesSummary {
 
   return &ps
 }
+
+func SelectProducts() ([]Product, error) {
+  query := "SELECT id,name,category,price,create_date FROM prices"
+
+  rows, err := PgxPool.Query(context.Background(), query)
+  if err != nil {
+    return nil, err
+  }
+  defer rows.Close()
+
+  var products []Product
+  for rows.Next() {
+    var p Product
+
+    err := rows.Scan(&p.Id, &p.Name, &p.Category, &p.Price, &p.CreateDate)
+    if err != nil {
+      fmt.Errorf("error scanning product row: %w", err)
+    }
+
+    products = append(products, p)
+  }
+
+  return products, nil
+}

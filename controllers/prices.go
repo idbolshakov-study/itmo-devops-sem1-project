@@ -24,7 +24,14 @@ func (h *PricesController) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *PricesController) Get(w http.ResponseWriter, r *http.Request) {
-  response, err := views.CreatePricesCsvZip()
+  products, err := models.SelectProducts()
+  if err != nil {
+    log.Println(err)
+    internalServerError(w, r)
+    return
+  }
+
+  response, err := views.CreatePricesCsvZip(products)
 
   if err != nil {
     log.Println(err)
