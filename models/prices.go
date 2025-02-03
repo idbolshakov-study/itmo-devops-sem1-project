@@ -5,10 +5,16 @@ import (
   "fmt"
   "time"
   "bytes"
+  "context"
+  "strings"
   "strconv"
   "archive/zip"
   "encoding/csv"
+
+  "github.com/jackc/pgx/v5/pgxpool"
 )
+
+var PgxPool *pgxpool.Pool
 
 type Product struct {
   Id         int
@@ -100,7 +106,19 @@ func StorePricesFromBody(body io.ReadCloser) (error) {
     products = append(products, product)
   }
 
-  log.Println(len(products))
+  var rows []string
+  for _, p := range products {
+    rows = append(
+      rows,
+      fmt.Sprintf("('%s','%s',%6.1f,'%s')", p.Name, p.Category, p.Price, p.CreateDate.Format("2006-01-02")),
+    )
+  }
+
+  PgxPool.QueryRow(context.Background(), fmt.Sprintf(
+    "%s %s",
+    "INSERT INTO prices (name,category,price,create_date) VALUES",
+    strings.Join(rows[:], ","),
+  ))
 
   return nil
 }
@@ -109,9 +127,9 @@ func StorePricesFromBody(body io.ReadCloser) (error) {
 func SelectPricesSummary() *PricesSummary {
   ps := PricesSummary{}
 
-  ps.TotalItems = 12
-  ps.TotalCategories = 10
-  ps.TotalPrice = 1000.5
+  query := "SELECT COUNT(*) AS total_items, COUNT(DISTINCT category) AS total_categories, SUM(price) AS total_price FROM prices"
+  row := PgxPool.QueryRow(context.Background(), query)
+  row.Scan(&ps.TotalItems, &ps.TotalCategories, &ps.TotalPrice)
 
   return &ps
 }

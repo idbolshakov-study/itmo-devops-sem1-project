@@ -1,0 +1,16 @@
+services:
+  postgres:
+    restart: always
+    container_name: postgres
+    image: postgres:13.10
+    environment:
+      - POSTGRES_DB=project-sem-1
+      - POSTGRES_USER=validator
+      - POSTGRES_PASSWORD=val1dat0r
+    ports:
+      - 5432:5432
+    volumes:
+      - itmo_devops_sem1_project:/var/lib/postgresql/data
+
+volumes:
+  itmo_devops_sem1_project:
