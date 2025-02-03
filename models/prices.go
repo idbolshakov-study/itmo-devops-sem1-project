@@ -30,24 +30,24 @@ type PricesSummary struct {
   TotalPrice      float32 `json:"total_price"`
 }
 
-func StorePricesFromBody(body io.ReadCloser) (error) {
+func StorePricesFromBody(body io.ReadCloser) (int, error) {
   bodyBytes, err := io.ReadAll(body)
   if err != nil {
     log.Println("Error reading request body:", err)
-    return err
+    return 0, err
   }
 
   zipReader, err := zip.NewReader(bytes.NewReader(bodyBytes), int64(len(bodyBytes)))
   if err != nil {
     log.Println("Error reading zip archive:", err)
-    return err
+    return 0, err
   }
 
   var csvReader *csv.Reader = nil
   for _, file := range zipReader.File {
     if file.Name != "data.csv" {
       log.Println("data.csv not found in zip archive", file.Name)
-      return fmt.Errorf("data.csv no found in zip archive")
+      return 0, fmt.Errorf("data.csv no found in zip archive")
     }
 
     fileReader, err := file.Open()
@@ -64,7 +64,7 @@ func StorePricesFromBody(body io.ReadCloser) (error) {
   // read header first
   _, err = csvReader.Read()
   if err != nil {
-    return fmt.Errorf("Error while reading csv header: %w", err)
+    return 0, fmt.Errorf("Error while reading csv header: %w", err)
   }
 
   // read csv rows
@@ -76,7 +76,7 @@ func StorePricesFromBody(body io.ReadCloser) (error) {
     }
 
     if err != nil {
-      return fmt.Errorf("Error while reading csv record: %w", err)
+      return 0, fmt.Errorf("Error while reading csv record: %w", err)
     }
 
     if len(record) != 5 {
@@ -120,16 +120,17 @@ func StorePricesFromBody(body io.ReadCloser) (error) {
     strings.Join(rows[:], ","),
   ))
 
-  return nil
+  return len(products), nil
 }
 
 
-func SelectPricesSummary() *PricesSummary {
+func SelectPricesSummary(totalItems int) *PricesSummary {
   ps := PricesSummary{}
 
-  query := "SELECT COUNT(*) AS total_items, COUNT(DISTINCT category) AS total_categories, SUM(price) AS total_price FROM prices"
+  query := "SELECT COUNT(DISTINCT category) AS total_categories, SUM(price) AS total_price FROM prices"
   row := PgxPool.QueryRow(context.Background(), query)
-  row.Scan(&ps.TotalItems, &ps.TotalCategories, &ps.TotalPrice)
+  row.Scan(&ps.TotalCategories, &ps.TotalPrice)
+  ps.TotalItems = totalItems
 
   return &ps
 }
