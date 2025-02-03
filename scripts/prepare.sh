@@ -14,4 +14,4 @@ PGPASSWORD=$DB_PASSWORD\
     -U $DB_USER -d $DB_NAME \
     -f sql/create_prices_table.sql
 
-go build
+go build -o app main.go
