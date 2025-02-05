@@ -32,7 +32,6 @@ func (h *PricesController) Get(w http.ResponseWriter, r *http.Request) {
   }
 
   response, err := views.CreatePricesCsvZip(products)
-
   if err != nil {
     log.Println(err)
     internalServerError(w, r)
@@ -48,13 +47,12 @@ func (h *PricesController) Create(w http.ResponseWriter, r *http.Request) {
   r.Body = http.MaxBytesReader(w, r.Body, 10<<20)
   defer r.Body.Close()
 
- totalItems, err := models.StorePricesFromBody(r.Body)
+  pricesSummary, err := models.StorePricesFromBody(r.Body)
   if err != nil {
     badRequest(w, r)
     return
   }
 
-  pricesSummary := models.SelectPricesSummary(totalItems)
   response, err := views.CreatePricesSummaryJson(pricesSummary)
   if err != nil {
     log.Println(err)

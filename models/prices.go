@@ -11,6 +11,7 @@ import (
   "archive/zip"
   "encoding/csv"
 
+  "github.com/jackc/pgx/v5"
   "github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -30,24 +31,24 @@ type PricesSummary struct {
   TotalPrice      float32 `json:"total_price"`
 }
 
-func StorePricesFromBody(body io.ReadCloser) (int, error) {
+func StorePricesFromBody(body io.ReadCloser) (*PricesSummary, error) {
   bodyBytes, err := io.ReadAll(body)
   if err != nil {
     log.Println("Error reading request body:", err)
-    return 0, err
+    return nil, err
   }
 
   zipReader, err := zip.NewReader(bytes.NewReader(bodyBytes), int64(len(bodyBytes)))
   if err != nil {
     log.Println("Error reading zip archive:", err)
-    return 0, err
+    return nil, err
   }
 
   var csvReader *csv.Reader = nil
   for _, file := range zipReader.File {
     if file.Name != "test_data.csv" {
       log.Println("data.csv not found in zip archive", file.Name)
-      return 0, fmt.Errorf("data.csv no found in zip archive")
+      return nil, fmt.Errorf("data.csv no found in zip archive")
     }
 
     fileReader, err := file.Open()
@@ -64,7 +65,7 @@ func StorePricesFromBody(body io.ReadCloser) (int, error) {
   // read header first
   _, err = csvReader.Read()
   if err != nil {
-    return 0, fmt.Errorf("Error while reading csv header: %w", err)
+    return nil, fmt.Errorf("Error while reading csv header: %w", err)
   }
 
   // read csv rows
@@ -76,7 +77,7 @@ func StorePricesFromBody(body io.ReadCloser) (int, error) {
     }
 
     if err != nil {
-      return 0, fmt.Errorf("Error while reading csv record: %w", err)
+      return nil, fmt.Errorf("Error while reading csv record: %w", err)
     }
 
     if len(record) != 5 {
@@ -114,24 +115,31 @@ func StorePricesFromBody(body io.ReadCloser) (int, error) {
     )
   }
 
-  PgxPool.QueryRow(context.Background(), fmt.Sprintf(
+  tx, err := PgxPool.BeginTx(context.Background(), pgx.TxOptions{})
+  if err != nil {
+    return nil, err
+  }
+  defer func() {
+    if err != nil {
+      tx.Rollback(context.Background())
+    } else {
+      tx.Commit(context.Background())
+    }
+  }()
+
+  tx.QueryRow(context.Background(), fmt.Sprintf(
     "%s %s",
     "INSERT INTO prices (name,category,price,create_date) VALUES",
     strings.Join(rows[:], ","),
   ))
 
-  return len(products), nil
-}
-
-
-func SelectPricesSummary(totalItems int) *PricesSummary {
   ps := PricesSummary{}
-  ps.TotalItems = totalItems
+  ps.TotalItems = len(products)
 
   query := "SELECT COUNT(DISTINCT category) AS total_categories, SUM(price) AS total_price FROM prices;"
-  PgxPool.QueryRow(context.Background(), query).Scan(&ps.TotalCategories, &ps.TotalPrice)
+  tx.QueryRow(context.Background(), query).Scan(&ps.TotalCategories, &ps.TotalPrice)
 
-  return &ps
+  return &ps, nil
 }
 
 func SelectProducts() ([]Product, error) {
@@ -149,10 +157,14 @@ func SelectProducts() ([]Product, error) {
 
     err := rows.Scan(&p.Id, &p.Name, &p.Category, &p.Price, &p.CreateDate)
     if err != nil {
-      fmt.Errorf("error scanning product row: %w", err)
+      fmt.Errorf("error while scanning product row: %w", err)
     }
 
     products = append(products, p)
+  }
+  if err = rows.Err(); err != nil {
+    fmt.Errorf("error while iterating product rows: %w", err)
+    return nil, err
   }
 
   return products, nil
